@@ -8,7 +8,6 @@ int major = 0, minor = 0;
 int device_count = 0;
 struct cdev hello_dev;
 
-module_param(howmany, int, S_IRUGO);
 module_param(whom, charp, S_IRUGO);
 
 loff_t hello_llseek(struct file *filp, loff_t off, int whence) {
