@@ -29,14 +29,16 @@ ssize_t hello_read(struct file *filp, char __user *buf, size_t count, loff_t *f_
 }
 
 ssize_t hello_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos) {
-    return 0;
+    printk(KERN_ALERT "hello module write (%08x): %s\n", buf,
+            buf);
+    return count;
 }
 
 struct file_operations hello_fops = {
 	.owner =    THIS_MODULE,
     /*.llseek =   hello_llseek,*/
     .read =     hello_read,
-    /*.write =    hello_write,*/
+    .write =    hello_write,
     /*.ioctl =    hello_ioctl,*/
 	.open =     hello_open,
 	.release =  hello_release
