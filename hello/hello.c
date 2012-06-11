@@ -2,6 +2,7 @@
 #include    <linux/module.h>
 #include    <linux/fs.h>
 #include    <linux/cdev.h>
+#include    <linux/proc_fs.h>
 
 static char* whom = "world";
 int major = 0, minor = 0;
@@ -44,9 +45,18 @@ struct file_operations hello_fops = {
 	.release =  hello_release
 };
 
+int hello_read_proc(char *page, char **start, off_t offset, int count,
+        int *eof, void *data) {
+    printk(KERN_ALERT "run hello_read_proc\n");
+    int len = 0;
+    len = sprintf(page, "  info of hello module exported to /proc\n");
+    return len;
+}
+
 static int hello_init(void) {
     int rc = 0;
     dev_t dev = 0;
+    struct proc_dir_entry* proc_entry = NULL;
     printk(KERN_ALERT "hello %s\n", whom);
     
     rc = alloc_chrdev_region(&dev, minor, device_count, "hello");
@@ -60,6 +70,10 @@ static int hello_init(void) {
     if (rc < 0) {
         printk(KERN_ALERT "can't add  device hello module\n");
     }
+    
+    proc_entry = create_proc_read_entry("hello_proc_entry",
+            0, NULL, hello_read_proc, NULL);
+    printk(KERN_ALERT "create /proc entry for hello module\n");
 
     return 0;
 }
@@ -69,6 +83,7 @@ static void hello_exit(void) {
 	unregister_chrdev_region(devno, device_count);
     printk(KERN_ALERT "bye, hello module\n");
     cdev_del(&hello_dev);
+    remove_proc_entry("hello_proc_entry", NULL);
 }
 
 module_init(hello_init);
