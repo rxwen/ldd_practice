@@ -3,11 +3,15 @@
 #include    <linux/fs.h>
 #include    <linux/cdev.h>
 #include    <linux/proc_fs.h>
+#include    <linux/poll.h>
+#include    <linux/sched.h>
 
 static char* whom = "world";
 int major = 0, minor = 0;
 int device_count = 0;
 struct cdev hello_dev;
+wait_queue_head_t inq;       /* write queue */
+int data_len = 0;   /* the data available for reading */
 
 module_param(whom, charp, S_IRUGO);
 
@@ -26,20 +30,34 @@ int hello_release(struct inode *inode, struct file *filp) {
 }
 
 ssize_t hello_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos) {
-    return 0;
+    int read_len = data_len;
+    data_len = 0;
+    return read_len;
 }
 
 ssize_t hello_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos) {
-    printk(KERN_ALERT "hello module write (%08x): %s\n", buf,
-            buf);
+    printk(KERN_ALERT "hello module write (%08x): %s\n", buf, buf);
+    data_len += count;
+	wake_up_interruptible(&inq);  /* awake select() */
     return count;
+}
+
+static unsigned int hello_poll(struct file *filp, poll_table *wait) {
+    unsigned int mask = 0;
+    printk(KERN_ALERT "hello poll begin\n", major);
+    poll_wait(filp, &inq, wait);
+    if(data_len > 0)
+        mask |= POLLIN | POLLRDNORM;
+    printk(KERN_ALERT "hello poll end\n", major);
+    return mask;
 }
 
 struct file_operations hello_fops = {
 	.owner =    THIS_MODULE,
-    /*.llseek =   hello_llseek,*/
+    .llseek =   hello_llseek,
     .read =     hello_read,
     .write =    hello_write,
+	.poll =		hello_poll,
     /*.ioctl =    hello_ioctl,*/
 	.open =     hello_open,
 	.release =  hello_release
@@ -74,6 +92,9 @@ static int hello_init(void) {
     proc_entry = create_proc_read_entry("hello_proc_entry",
             0, NULL, hello_read_proc, NULL);
     printk(KERN_ALERT "create /proc entry for hello module\n");
+
+    printk(KERN_ALERT "init inq");
+	init_waitqueue_head(&inq);
 
     return 0;
 }
