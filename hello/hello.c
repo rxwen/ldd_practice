@@ -8,11 +8,12 @@
 
 static char* whom = "world";
 int major = 0, minor = 0;
-int device_count = 0;
-struct cdev hello_dev;
+#define DEVICE_COUNT 3
+struct cdev hello_dev[DEVICE_COUNT];
 wait_queue_head_t inq;       /* write queue */
 int data_len = 0;   /* the data available for reading */
 
+module_param(major, int, S_IRUGO);
 module_param(whom, charp, S_IRUGO);
 
 loff_t hello_llseek(struct file *filp, loff_t off, int whence) {
@@ -20,7 +21,8 @@ loff_t hello_llseek(struct file *filp, loff_t off, int whence) {
 }
 
 static int hello_open(struct inode *inode, struct file *filp) {
-    printk(KERN_ALERT "hello module (major: %d) is opened\n", major);
+    printk(KERN_ALERT "hello module (major: %d, minor: %d) is opened\n", 
+            major, iminor(inode));
     return 0;
 }
 
@@ -72,19 +74,33 @@ int hello_read_proc(char *page, char **start, off_t offset, int count,
 }
 
 static int hello_init(void) {
-    int rc = 0;
+    int rc = 0, i = 0;
     dev_t dev = 0;
     struct proc_dir_entry* proc_entry = NULL;
     printk(KERN_ALERT "hello %s\n", whom);
     
-    rc = alloc_chrdev_region(&dev, minor, device_count, "hello");
-    if (rc < 0) {
-        printk(KERN_ALERT "can't get major for hello module\n");
+    if(major) { // use fixed major number
+		dev = MKDEV(major, minor);
+		rc = register_chrdev_region(dev, DEVICE_COUNT, "scull");
+        if(rc < 0)
+            return -1;
     }
-    major = MAJOR(dev);
-    printk(KERN_ALERT "hello module's major number is %d\n", major);
-    cdev_init(&hello_dev, &hello_fops);
-    rc = cdev_add(&hello_dev, dev, 1);
+    else { // use dynamic major number
+        rc = alloc_chrdev_region(&dev, minor, DEVICE_COUNT, "hello");
+        if (rc < 0) {
+            printk(KERN_ALERT "can't get major for hello module\n");
+            return -1;
+        }
+        major = MAJOR(dev);
+        minor = MINOR(dev);
+    }
+    printk(KERN_ALERT "hello module's major number is %d, minor is %d\n", major, minor);
+
+    for(i = 0; i < DEVICE_COUNT; ++i) {
+		dev = MKDEV(major, minor+i);
+        cdev_init(&hello_dev[i], &hello_fops);
+        rc = cdev_add(&hello_dev[i], dev, 1);
+    }
     if (rc < 0) {
         printk(KERN_ALERT "can't add  device hello module\n");
     }
@@ -100,10 +116,12 @@ static int hello_init(void) {
 }
 
 static void hello_exit(void) {
+    int i = 0;
 	dev_t devno = MKDEV(major, minor);
-	unregister_chrdev_region(devno, device_count);
+	unregister_chrdev_region(devno, DEVICE_COUNT);
     printk(KERN_ALERT "bye, hello module\n");
-    cdev_del(&hello_dev);
+    for(i = 0; i < DEVICE_COUNT; ++i)
+        cdev_del(&hello_dev[i]);
     remove_proc_entry("hello_proc_entry", NULL);
 }
 
