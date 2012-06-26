@@ -81,7 +81,7 @@ static int hello_init(void) {
     
     if(major) { // use fixed major number
 		dev = MKDEV(major, minor);
-		rc = register_chrdev_region(dev, DEVICE_COUNT, "scull");
+		rc = register_chrdev_region(dev, DEVICE_COUNT, "hello");
         if(rc < 0)
             return -1;
     }
